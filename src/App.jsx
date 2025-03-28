@@ -9,10 +9,13 @@ const App = () => {
     minDependents: 0,
     maxDependents: Infinity,
     selectedTags: [],
-    selectedProject: null
+    selectedProject: null,
+    showCyclesOnly: false
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentCycleIndex, setCurrentCycleIndex] = useState(0);
+  const [resolvedCycles, setResolvedCycles] = useState(new Set());
 
   useEffect(() => {
     const loadData = async () => {
@@ -23,7 +26,20 @@ const App = () => {
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         if (!data || !data.nodes || !data.dependencies) throw new Error('Invalid project graph data format');
-        setProjectGraph(data);
+
+        const cleanedData = {
+          nodes: { ...data.nodes },
+          dependencies: { ...data.dependencies }
+        };
+        delete cleanedData.nodes['coursera-web'];
+        delete cleanedData.dependencies['coursera-web'];
+        Object.keys(cleanedData.dependencies).forEach(project => {
+          cleanedData.dependencies[project] = cleanedData.dependencies[project].filter(
+              dep => dep.target !== 'coursera-web'
+          );
+        });
+
+        setProjectGraph(cleanedData);
       } catch (err) {
         setError(err.message || 'Failed to load project graph data');
       } finally {
@@ -50,6 +66,104 @@ const App = () => {
     deps.forEach(dep => { dependentsCount[dep.target] = (dependentsCount[dep.target] || 0) + 1; });
   });
 
+  const calculateMetrics = () => {
+    const depth = {};
+    const cycles = [];
+    const cyclePaths = {};
+    const visited = new Set();
+    const recursionStack = new Set();
+    const path = {};
+
+    const dfs = (node, currentPath) => {
+      if (recursionStack.has(node)) {
+        const cycleStart = currentPath.indexOf(node);
+        const cycle = currentPath.slice(cycleStart);
+        const cycleKey = cycle.join(' -> ');
+        if (!cycles.some(c => c.join(' -> ') === cycleKey)) {
+          cycles.push(cycle);
+          cyclePaths[node] = cycleKey;
+        }
+        return 0;
+      }
+      if (visited.has(node)) return depth[node] || 0;
+
+      visited.add(node);
+      recursionStack.add(node);
+      path[node] = currentPath;
+
+      const deps = dependencies[node] || [];
+      let maxDepth = 0;
+      deps.forEach(dep => {
+        maxDepth = Math.max(maxDepth, 1 + dfs(dep.target, [...currentPath, dep.target]));
+      });
+
+      recursionStack.delete(node);
+      depth[node] = maxDepth;
+      return maxDepth;
+    };
+
+    projects.forEach(project => {
+      if (!visited.has(project)) {
+        dfs(project, [project]);
+      }
+    });
+
+    return { depth, cycles, cyclePaths };
+  };
+
+  const { depth, cycles, cyclePaths } = calculateMetrics();
+  const unresolvedCycles = cycles.filter(cycle => !resolvedCycles.has(cycle.join(' -> ')));
+
+  // Get project type based on tags
+  const getProjectType = (project) => {
+    const tags = nodes[project]?.data.tags || [];
+    if (tags.includes('app')) return 'app';
+    if (tags.includes('shared')) return 'shared';
+    if (tags.includes('lib')) return 'lib';
+    return 'unknown';
+  };
+
+  // Suggest link to break respecting layering policies
+  const suggestLinkToBreak = (cycle) => {
+    // Policy violations take priority
+    for (let i = 0; i < cycle.length; i++) {
+      const from = cycle[i];
+      const to = cycle[(i + 1) % cycle.length];
+      const fromType = getProjectType(from);
+      const toType = getProjectType(to);
+
+      // Policy 1: No shared/lib -> app
+      if ((fromType === 'shared' || fromType === 'lib') && toType === 'app') {
+        return { from, to, reason: `${fromType} should not depend on app` };
+      }
+
+      // Policy 2: No lib -> app/shared
+      if (fromType === 'lib' && (toType === 'app' || toType === 'shared')) {
+        return { from, to, reason: `lib should not depend on ${toType}` };
+      }
+    }
+
+    // If no policy violations, fall back to least dependents
+    let minDependents = Infinity;
+    let suggestedLink = null;
+    for (let i = 0; i < cycle.length; i++) {
+      const from = cycle[i];
+      const to = cycle[(i + 1) % cycle.length];
+      const dependents = dependentsCount[to] || 0;
+      if (dependents < minDependents) {
+        minDependents = dependents;
+        suggestedLink = { from, to, reason: `Least dependents (${dependents})` };
+      }
+    }
+    return suggestedLink;
+  };
+
+  const modularityScore = project => {
+    const depCount = dependencies[project]?.length || 0;
+    const depntCount = dependentsCount[project] || 0;
+    return ((depCount + depntCount) / (projects.length || 1)).toFixed(2);
+  };
+
   const allTags = [...new Set(projects.flatMap(p => (nodes[p].data.tags || []).filter(tag => !tag.startsWith('npm:'))))];
   const targets = new Set(Object.values(dependencies).flatMap(deps => deps.map(dep => dep.target)));
 
@@ -57,12 +171,14 @@ const App = () => {
     const depCount = dependencies[project]?.length || 0;
     const depntCount = dependentsCount[project] || 0;
     const projectData = nodes[project];
+    const inCycle = cycles.some(cycle => cycle.includes(project));
     return (
         depCount >= filters.minDependencies &&
         (filters.maxDependencies === Infinity || depCount <= filters.maxDependencies) &&
         depntCount >= filters.minDependents &&
         (filters.maxDependents === Infinity || depntCount <= filters.maxDependents) &&
-        (filters.selectedTags.length === 0 || (projectData.data.tags || []).some(tag => filters.selectedTags.includes(tag)))
+        (filters.selectedTags.length === 0 || (projectData.data.tags || []).some(tag => filters.selectedTags.includes(tag))) &&
+        (!filters.showCyclesOnly || inCycle)
     );
   });
 
@@ -82,11 +198,75 @@ const App = () => {
 
   const updateFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
 
+  const resolveCycle = (cycle) => {
+    const cycleKey = cycle.join(' -> ');
+    setResolvedCycles(prev => new Set([...prev, cycleKey]));
+    setCurrentCycleIndex(Math.min(currentCycleIndex, unresolvedCycles.length - 2));
+  };
+
+  const exportData = () => {
+    const csv = [
+      ['Package', 'Dependencies', 'Dependents', 'Depth', 'In Cycle', 'Cycle Path', 'Modularity', 'Tags'],
+      ...sortedProjects.map(project => [
+        project,
+        dependencies[project]?.length || 0,
+        dependentsCount[project] || 0,
+        depth[project],
+        cycles.some(c => c.includes(project)) ? 'Yes' : 'No',
+        cyclePaths[project] || '',
+        modularityScore(project),
+        `"${(nodes[project].data.tags || []).filter(tag => !tag.startsWith('npm:')).join(', ')}"`
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'project_graph_analysis.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const currentCycle = unresolvedCycles[currentCycleIndex] || [];
+  const suggestedLink = currentCycle.length ? suggestLinkToBreak(currentCycle) : null;
+
   return (
       <div className="container">
         <header className="header">
           <h1>Package Graph Analyzer</h1>
+          <div>
+            <span className="progress">Cycles Remaining: {unresolvedCycles.length} / {cycles.length}</span>
+            <button className="export-button" onClick={exportData}>Export CSV</button>
+          </div>
         </header>
+
+        <section className="cycle-navigator">
+          {unresolvedCycles.length > 0 && (
+              <>
+                <h3>Current Cycle ({currentCycleIndex + 1}/{unresolvedCycles.length})</h3>
+                <div className="cycle-info">
+                  <p>Path: {currentCycle.join(' -> ')}</p>
+                  <p>Suggested Break: {suggestedLink ? `${suggestedLink.from} -> ${suggestedLink.to}` : 'None'}</p>
+                  {suggestedLink && <p>Reason: {suggestedLink.reason}</p>}
+                  <button
+                      className="action-button"
+                      onClick={() => resolveCycle(currentCycle)}
+                  >
+                    Mark as Resolved
+                  </button>
+                  <button
+                      className="action-button"
+                      onClick={() => setCurrentCycleIndex(prev => Math.min(prev + 1, unresolvedCycles.length - 1))}
+                      disabled={currentCycleIndex === unresolvedCycles.length - 1}
+                  >
+                    Next Cycle
+                  </button>
+                </div>
+              </>
+          )}
+          {unresolvedCycles.length === 0 && <p className="success">All cycles resolved!</p>}
+        </section>
 
         <section className="filters">
           <div className="filter-card">
@@ -108,6 +288,13 @@ const App = () => {
                 </label>
             ))}
           </div>
+          <div className="filter-card">
+            <h3>Cycles</h3>
+            <label>
+              <input type="checkbox" checked={filters.showCyclesOnly} onChange={e => updateFilter('showCyclesOnly', e.target.checked)} />
+              Show only projects in cycles
+            </label>
+          </div>
         </section>
 
         <section className="results">
@@ -117,6 +304,7 @@ const App = () => {
             <span>Avg dependencies: {(sortedProjects.reduce((sum, p) => sum + (dependencies[p]?.length || 0), 0) / (sortedProjects.length || 1)).toFixed(2)}</span>
             <span>No dependents: {sortedProjects.filter(p => !targets.has(p)).length}</span>
             <span>Avg dependents: {(sortedProjects.reduce((sum, p) => sum + (dependentsCount[p] || 0), 0) / (sortedProjects.length || 1)).toFixed(2)}</span>
+            <span>In cycles: {sortedProjects.filter(p => cycles.some(c => c.includes(p))).length}</span>
           </div>
           <table>
             <thead>
@@ -124,6 +312,10 @@ const App = () => {
               <th>Package</th>
               <th>Dependencies</th>
               <th>Dependents</th>
+              <th>Depth</th>
+              <th>In Cycle</th>
+              <th>Cycle Path</th>
+              <th>Modularity</th>
               <th>Tags</th>
             </tr>
             </thead>
@@ -150,6 +342,17 @@ const App = () => {
                         </div>
                     )}
                   </td>
+                  <td>{depth[project]}</td>
+                  <td>{cycles.some(c => c.includes(project)) ? 'Yes' : 'No'}</td>
+                  <td className="hoverable">
+                    {cyclePaths[project] ? 'Yes' : '-'}
+                    {cyclePaths[project] && (
+                        <div className="popup">
+                          {cyclePaths[project]}
+                        </div>
+                    )}
+                  </td>
+                  <td>{modularityScore(project)}</td>
                   <td>{(nodes[project].data.tags || []).filter(tag => !tag.startsWith('npm:')).join(', ')}</td>
                 </tr>
             ))}

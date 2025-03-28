@@ -1,6 +1,6 @@
 /* General Styles */
 .container {
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 20px;
   background: linear-gradient(135deg, #1e1e2f 0%, #2d2d44 100%);
@@ -19,7 +19,9 @@
 
 /* Header */
 .header {
-  text-align: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 20px;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 15px;
@@ -32,6 +34,12 @@
   font-size: 2.5rem;
   color: #00d1b2;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.progress {
+  margin-right: 20px;
+  font-weight: 600;
+  color: #00d1b2;
 }
 
 /* Error Handling */
@@ -62,6 +70,58 @@
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
 }
 
+/* Cycle Navigator */
+.cycle-navigator {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 20px;
+  border-radius: 15px;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.cycle-navigator h3 {
+  color: #00d1b2;
+  margin: 0 0 15px;
+  font-size: 1.5rem;
+}
+
+.cycle-info p {
+  margin: 10px 0;
+  font-size: 0.95rem;
+}
+
+.action-button {
+  padding: 10px 20px;
+  background: #3273dc;
+  border: none;
+  border-radius: 25px;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  margin-right: 10px;
+  transition: all 0.3s ease;
+}
+
+.action-button:hover {
+  background: #1857b6;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+.action-button:disabled {
+  background: #666;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.success {
+  color: #00d1b2;
+  font-weight: 600;
+  text-align: center;
+  font-size: 1.2rem;
+}
+
 /* Filters */
 .filters {
   display: grid;
@@ -85,6 +145,7 @@
 .filter-card h3 {
   color: #00d1b2;
   margin: 0 0 15px;
+  font-size: 1.2rem;
 }
 
 .filter-card label {
@@ -120,11 +181,12 @@
 .results h2 {
   color: #00d1b2;
   margin: 0 0 20px;
+  font-size: 1.8rem;
 }
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 10px;
   margin: 0 0 20px;
   padding: 15px;
@@ -143,6 +205,7 @@ table {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   overflow: hidden;
+  table-layout: fixed;
 }
 
 th, td {
@@ -150,6 +213,7 @@ th, td {
   text-align: left;
 }
 
+/* Continuing from 'th' styling */
 th {
   background: #3273dc;
   color: white;
@@ -195,4 +259,114 @@ tr.selected {
   transform: translateX(-50%);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   white-space: pre-wrap;
+}
+
+/* Export Button */
+.export-button {
+  padding: 10px 20px;
+  background: #3273dc;
+  border: none;
+  border-radius: 25px;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.export-button:hover {
+  background: #1857b6;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Column Widths */
+th:nth-child(1), td:nth-child(1) { width: 20%; } /* Package */
+th:nth-child(2), td:nth-child(2) { width: 10%; } /* Dependencies */
+th:nth-child(3), td:nth-child(3) { width: 10%; } /* Dependents */
+th:nth-child(4), td:nth-child(4) { width: 8%; }  /* Depth */
+th:nth-child(5), td:nth-child(5) { width: 8%; }  /* In Cycle */
+th:nth-child(6), td:nth-child(6) { width: 20%; } /* Cycle Path */
+th:nth-child(7), td:nth-child(7) { width: 8%; }  /* Modularity */
+th:nth-child(8), td:nth-child(8) { width: 16%; } /* Tags */
+
+/* Responsive Adjustments */
+@media (max-width: 1200px) {
+  .container {
+    max-width: 100%;
+    padding: 15px;
+  }
+
+  .filters {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .metrics {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  }
+
+  table {
+    font-size: 0.9rem;
+  }
+
+  th, td {
+    padding: 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .header h1 {
+    margin-bottom: 15px;
+  }
+
+  .progress {
+    margin: 0 0 15px;
+  }
+
+  .cycle-navigator {
+    padding: 15px;
+  }
+
+  .cycle-info p {
+    font-size: 0.85rem;
+  }
+
+  .action-button {
+    padding: 8px 15px;
+    margin: 5px 5px 0 0;
+  }
+
+  .results h2 {
+    font-size: 1.5rem;
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .filter-card {
+    padding: 15px;
+  }
+
+  .filter-card h3 {
+    font-size: 1rem;
+  }
+
+  .filter-card input[type="number"],
+  .filter-card select {
+    width: 60px;
+    padding: 6px;
+  }
+
+  .metrics span {
+    font-size: 0.8rem;
+  }
 }
