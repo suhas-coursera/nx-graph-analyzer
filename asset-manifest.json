@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/nx-graph-analyzer/static/css/main.e2a1d876.css",
+    "main.js": "/nx-graph-analyzer/static/js/main.120650da.js",
+    "static/js/453.5bd73665.chunk.js": "/nx-graph-analyzer/static/js/453.5bd73665.chunk.js",
+    "index.html": "/nx-graph-analyzer/index.html",
+    "main.e2a1d876.css.map": "/nx-graph-analyzer/static/css/main.e2a1d876.css.map",
+    "main.120650da.js.map": "/nx-graph-analyzer/static/js/main.120650da.js.map",
+    "453.5bd73665.chunk.js.map": "/nx-graph-analyzer/static/js/453.5bd73665.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e2a1d876.css",
+    "static/js/main.120650da.js"
+  ]
+}
